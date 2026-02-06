@@ -9,56 +9,70 @@ const SuggestedUsers = () => {
 
   return (
     <div className="my-10">
+
       <div className="flex items-center justify-between text-sm">
         <h1 className="font-semibold text-gray-600">Suggested for you</h1>
-        <span className="font-medium cursor-pointer">See All</span>
+        {suggestedUsers?.length > 0 && (
+          <span className="font-medium cursor-pointer">See All</span>
+        )}
       </div>
 
-      {/* Scrollable container */}
-      <div className="mt-4 max-h-[320px] overflow-y-auto space-y-5 pr-1">
-        <AnimatePresence>
-          {suggestedUsers.map((user) => (
-            <motion.div
-              key={user._id}
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, x: -20 }}
-              transition={{ duration: 0.3, ease: "easeOut" }}
-              className="flex items-center justify-between"
-            >
-              <div className="flex items-center gap-2">
-                <Link to={`/profile/${user._id}`}>
-                  <Avatar>
-                    <AvatarImage src={user.profilePicture} alt="profile" />
-                    <AvatarFallback>CN</AvatarFallback>
-                  </Avatar>
-                </Link>
-
-                <div>
-                  <h1 className="font-semibold text-sm">
-                    <Link to={`/profile/${user._id}`}>
-                      {user.username}
-                    </Link>
-                  </h1>
-                  <span className="text-gray-600 text-sm">
-                    {user.bio || "Bio here..."}
-                  </span>
-                </div>
-              </div>
-
-              <motion.span
-                whileHover={{ scale: 1.1 }}
-                whileTap={{ scale: 0.95 }}
-                className="text-[#3BADF8] text-xs font-bold cursor-pointer hover:text-[#3495d6]"
+      {/* EMPTY STATE */}
+      {(!suggestedUsers || suggestedUsers.length === 0) ? (
+        <div className="flex items-center justify-center h-80">
+          <p className="text-lg font-bold text-black-500 text-center">
+            You have no more suggestions
+          </p>
+        </div>
+      ) : (
+        /* SUGGESTED USERS LIST */
+        <div className="mt-4 h-[320px] overflow-hidden relative">
+          <motion.div
+            className="space-y-5 absolute w-full"
+            animate={{ y: ["0%", "-50%"] }}
+            transition={{
+              repeat: Infinity,
+              duration: suggestedUsers.length * 2,
+              ease: "linear",
+            }}
+          >
+            {[...suggestedUsers, ...suggestedUsers].map((user, index) => (
+              <div
+                key={`${user._id}-${index}`}
+                className="flex items-center justify-between"
               >
-                Follow
-              </motion.span>
-            </motion.div>
-          ))}
-        </AnimatePresence>
-      </div>
+                <div className="flex items-center gap-2">
+                  <Link to={`/profile/${user._id}`}>
+                    <Avatar>
+                      <AvatarImage src={user.profilePicture} alt="profile" />
+                      <AvatarFallback>CN</AvatarFallback>
+                    </Avatar>
+                  </Link>
+
+                  <div>
+                    <h1 className="font-semibold text-sm">
+                      <Link to={`/profile/${user._id}`}>
+                        {user.username}
+                      </Link>
+                    </h1>
+                    <span className="text-gray-600 text-sm">
+                      {user.bio || "Bio here..."}
+                    </span>
+                  </div>
+                </div>
+
+                <span className="text-[#3BADF8] text-xs font-bold cursor-pointer">
+                  Follow
+                </span>
+              </div>
+            ))}
+          </motion.div>
+        </div>
+
+      )}
     </div>
   );
 };
 
 export default SuggestedUsers;
+

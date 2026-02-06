@@ -4,7 +4,8 @@ const authSlice = createSlice({
     name: "auth",
     initialState: {
         user: {
-            bookmarks: []
+            bookmarks: [],
+            reelBookmarks: []
         },
         suggestedUsers: [],
         followingUsers: [],
@@ -13,23 +14,77 @@ const authSlice = createSlice({
     },
 
     reducers: {
+        // setAuthUser: (state, action) => {
+        //     state.user = {
+        //         ...action.payload,
+        //         bookmarks: action.payload?.bookmarks || []
+        //     };
+        // },
+        // setAuthUser: (state, action) => {
+        //     const payload = action.payload;
+
+        //     state.user = {
+        //         ...payload,
+        //         followers: (payload.followers || []).map(f =>
+        //             typeof f === "object" ? f._id : f
+        //         ),
+        //         following: (payload.following || []).map(f =>
+        //             typeof f === "object" ? f._id : f
+        //         ),
+        //         bookmarks: payload.bookmarks || [],
+        //         reelBookmarks: payload.reelBookmarks || []
+        //     };
+        // },
         setAuthUser: (state, action) => {
+            const payload = action.payload;
+
+            if (!payload) {
+                state.user = null;
+                state.userProfile = null;
+                state.followingUsers = [];
+                state.suggestedUsers = [];
+                return;
+            }
+
             state.user = {
-                ...action.payload,
-                bookmarks: action.payload?.bookmarks || []
+                ...payload,
+                followers: (payload.followers || []).map(f =>
+                    typeof f === "object" ? f._id : f
+                ),
+                following: (payload.following || []).map(f =>
+                    typeof f === "object" ? f._id : f
+                ),
+                bookmarks: payload.bookmarks || [],
+                reelBookmarks: payload.reelBookmarks || []
             };
         },
-
-
         setSuggestedUsers: (state, action) => {
             state.suggestedUsers = action.payload;
         },
         setFollowingUsers: (state, action) => {
             state.followingUsers = action.payload;
         },
+        // setUserProfile: (state, action) => {
+        //     state.userProfile = action.payload;
+        // },
         setUserProfile: (state, action) => {
-            state.userProfile = action.payload;
+            const payload = action.payload;
+            if (!payload) {
+                state.userProfile = null;
+                return;
+            }
+
+            state.userProfile = {
+                ...payload,
+                followers: (payload.followers || []).map(f =>
+                    typeof f === "object" ? f._id : f
+                ),
+                following: (payload.following || []).map(f =>
+                    typeof f === "object" ? f._id : f
+                )
+            };
         },
+
 
         setSelectedUser: (state, action) => {
             state.selectedUser = action.payload;

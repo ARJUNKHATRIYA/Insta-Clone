@@ -9,9 +9,11 @@ const userSchema = new mongoose.Schema({
     gender:{type:String,enum:['male','female']},
     followers:[{type:mongoose.Schema.Types.ObjectId, ref:'User'}],
     following:[{type:mongoose.Schema.Types.ObjectId, ref:'User'}],
+    followRequests: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
     posts:[{type:mongoose.Schema.Types.ObjectId, ref:'Post'}],
+    reels:[{type:mongoose.Schema.Types.ObjectId, ref:'Reel'}],
     bookmarks:[{type:mongoose.Schema.Types.ObjectId, ref:'Post'}],
-    
+    reelBookmarks:[{type:mongoose.Schema.Types.ObjectId, ref:'Reel'}],
 
 },{timestamps:true});
 export const User = mongoose.model('User', userSchema);

@@ -1,453 +1,392 @@
-import React, { useEffect, useState, useRef } from 'react'
-import { useDispatch, useSelector } from 'react-redux'
-import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
-import { setSelectedUser, setMessages } from '@/redux/chatSlice';
-import { Input } from './ui/input';
-import { Button } from './ui/button';
-import { MessageCircleCode } from 'lucide-react';
-import Messages from './Messages';
-import axios from 'axios';
-import { useParams } from 'react-router-dom';
-import useGetFollowingUsers from '@/hooks/useGetFollowingUsers';
-import socket from "@/lib/socket";
+import React, { useEffect, useState, useRef } from "react";
+import { useDispatch, useSelector } from "react-redux";
+import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
+import { setSelectedUser } from "@/redux/chatSlice";
+import { Input } from "./ui/input";
+import { Button } from "./ui/button";
+import { MessageCircleCode } from "lucide-react";
+import Messages from "./Messages";
+import axios from "axios";
+import { useParams, useNavigate } from "react-router-dom";
+import useGetFollowingUsers from "@/hooks/useGetFollowingUsers";
 import ChatHeader from "./ChatHeader";
 
 const ChatPage = () => {
-    const [textMessage, setTextMessage] = useState("");
-    const dispatch = useDispatch();
-    const { userId } = useParams();
-    const { user, followingUsers } = useSelector((store) => store.auth);
-    const { onlineUsers, messages, selectedUser } = useSelector((store) => store.chat);
-    
-    const peerRef = useRef(null);
-    const localStreamRef = useRef(null);
-    const localVideoRef = useRef(null);
-    const remoteVideoRef = useRef(null);
-    const [inCall, setInCall] = useState(false);
-    const [callType, setCallType] = useState(null);
+  const dispatch = useDispatch();
+  const navigate = useNavigate();
+  const { userId } = useParams();
 
-    useGetFollowingUsers();
+  const { user, followingUsers } = useSelector(s => s.auth);
+  const { onlineUsers, selectedUser } = useSelector(s => s.chat);
+  const { socket } = useSelector(s => s.socketio);
 
-    // Socket connection
-    useEffect(() => {
-        console.log("🔌 Connecting socket for user:", user?._id);
-        if (user?._id) {
-            socket.connect();
-            socket.emit("register-user", user._id);
-            console.log("✅ User registered:", user._id);
-        }
+  const [textMessage, setTextMessage] = useState("");
 
-        return () => {
-            console.log("🔌 Disconnecting socket");
-            socket.disconnect();
-        };
-    }, [user?._id]);
+  /* ================= CALL STATE ================= */
+  const [callState, setCallState] = useState("idle");
+  const [callType, setCallType] = useState(null);
+  const [incomingCall, setIncomingCall] = useState(null);
 
-    // Start call function
-    const startCall = async (type) => {
-        if (!selectedUser) return;
+  /* ================= WEBRTC REFS ================= */
+  const peerRef = useRef(null);
+  const localStreamRef = useRef(null);
+  const localVideoRef = useRef(null);
+  const remoteVideoRef = useRef(null);
+  const pendingCandidates = useRef([]);
 
-        console.log(`📞 Starting ${type} call to:`, selectedUser._id);
-        setCallType(type);
-        setInCall(true);
+  // 🔐 HARD LOCK (MOST IMPORTANT FIX)
+  const acquiringMediaRef = useRef(false);
 
-        try {
-            // Get media FIRST
-            localStreamRef.current = await navigator.mediaDevices.getUserMedia({
-                audio: true,
-                video: type === "video"
-            });
-            console.log("✅ Got local media stream");
+  useGetFollowingUsers();
 
-            // Create peer connection
-            peerRef.current = new RTCPeerConnection({
-                iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
-            });
+  /* ================= MEDIA ================= */
+  const getLocalStream = async (video) => {
+    if (localStreamRef.current) return localStreamRef.current;
+    if (acquiringMediaRef.current) throw new Error("Media busy");
 
-            // Monitor connection state
-            peerRef.current.onconnectionstatechange = () => {
-                console.log("🔗 Connection state:", peerRef.current.connectionState);
-            };
+    acquiringMediaRef.current = true;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: true,
+        video
+      });
+      localStreamRef.current = stream;
+      return stream;
+    } finally {
+      acquiringMediaRef.current = false;
+    }
+  };
 
-            // Add tracks
-            localStreamRef.current.getTracks().forEach(track => {
-                peerRef.current.addTrack(track, localStreamRef.current);
-                console.log("✅ Added track:", track.kind);
-            });
+  const releaseMedia = () => {
+    if (localStreamRef.current) {
+      localStreamRef.current.getTracks().forEach(t => t.stop());
+      localStreamRef.current = null;
+    }
+    if (localVideoRef.current) localVideoRef.current.srcObject = null;
+    if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null;
+  };
 
-            // Local video
-            if (type === "video" && localVideoRef.current) {
-                localVideoRef.current.srcObject = localStreamRef.current;
-            }
+  /* ================= CLEANUP ================= */
+  const cleanupCall = () => {
+    if (peerRef.current) {
+      peerRef.current.ontrack = null;
+      peerRef.current.onicecandidate = null;
+      peerRef.current.close();
+      peerRef.current = null;
+    }
+    releaseMedia();
+    pendingCandidates.current = [];
+    setIncomingCall(null);
+    setCallType(null);
+    setCallState("idle");
+  };
 
-            // Remote stream
-            peerRef.current.ontrack = (e) => {
-                console.log("📹 Received remote track:", e.track.kind);
-                if (remoteVideoRef.current && e.streams[0]) {
-                    remoteVideoRef.current.srcObject = e.streams[0];
+  useEffect(() => () => cleanupCall(), []);
 
-                    remoteVideoRef.current.onloadedmetadata = () => {
-                        console.log("📹 Video metadata loaded:",
-                            remoteVideoRef.current.videoWidth,
-                            remoteVideoRef.current.videoHeight);
-                        console.log("✅ Video should be playing");
-                    };
-                }
-            };
+  /* ================= ROUTE ================= */
+  useEffect(() => {
+    if (!userId) navigate("/chat");
+  }, [userId]);
 
-            // ICE candidates
-            peerRef.current.onicecandidate = (event) => {
-                if (event.candidate) {
-                    console.log("🧊 Sending ICE candidate");
-                    socket.emit("ice-candidate", {
-                        senderId: user._id,
-                        to: selectedUser._id,
-                        candidate: event.candidate
-                    });
-                }
-            };
+  /* ================= START CALL ================= */
+  const startCall = async (type) => {
+    if (!selectedUser || !socket || peerRef.current) return;
 
-            // Create offer
-            const offer = await peerRef.current.createOffer();
-            await peerRef.current.setLocalDescription(offer);
-            console.log("✅ Created offer");
+    setCallType(type);
+    setCallState("calling");
 
-            // Send call
-            socket.emit("call-user", {
-                senderId: user._id,
-                receiverId: selectedUser._id,
-                offer,
-                callType: type
-            });
-        } catch (error) {
-            console.error("❌ Error starting call:", error);
-            endCall();
-        }
+    peerRef.current = new RTCPeerConnection({
+      iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
+    });
+
+    try {
+      const stream = await getLocalStream(type === "video");
+
+      stream.getTracks().forEach(track =>
+        peerRef.current.addTrack(track, stream)
+      );
+
+      if (type === "video" && localVideoRef.current) {
+        localVideoRef.current.srcObject = stream;
+      }
+    } catch (err) {
+      console.error("Media error:", err);
+      cleanupCall();
+      return;
+    }
+
+    peerRef.current.ontrack = e => {
+      if (remoteVideoRef.current && e.streams[0]) {
+        remoteVideoRef.current.srcObject = e.streams[0];
+      }
     };
 
-    // Handle incoming call
-    useEffect(() => {
-        const handleIncomingCall = async ({ from, offer, callType }) => {
-            console.log(`📞 Incoming ${callType} call from:`, from);
-            
-            const accept = window.confirm(`Incoming ${callType} call. Accept?`);
-            if (!accept) return;
-
-            // Set call state FIRST to render video elements
-            setCallType(callType);
-            setInCall(true);
-
-            // Wait for video elements to render
-            await new Promise(resolve => setTimeout(resolve, 100));
-
-            console.log("📹 Video refs status after render:", {
-                localVideoRef: !!localVideoRef.current,
-                remoteVideoRef: !!remoteVideoRef.current
-            });
-
-            try {
-                // Get media
-                localStreamRef.current = await navigator.mediaDevices.getUserMedia({
-                    audio: true,
-                    video: callType === "video"
-                });
-                console.log("✅ Got local media stream");
-
-                // Create peer
-                peerRef.current = new RTCPeerConnection({
-                    iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
-                });
-
-                peerRef.current.onconnectionstatechange = () => {
-                    console.log("🔗 Connection state:", peerRef.current.connectionState);
-                };
-
-                // Add tracks
-                localStreamRef.current.getTracks().forEach(track => {
-                    peerRef.current.addTrack(track, localStreamRef.current);
-                    console.log("✅ Added track:", track.kind);
-                });
-
-                // Setup local video
-                if (callType === "video" && localVideoRef.current) {
-                    localVideoRef.current.srcObject = localStreamRef.current;
-                }
-
-                // Remote stream handler
-                peerRef.current.ontrack = (event) => {
-                    console.log("📹 Received remote track:", event.track.kind);
-                    
-                    if (event.streams && event.streams[0]) {
-                        console.log("📹 Got stream:", event.streams[0].id);
-                        
-                        if (remoteVideoRef.current) {
-                            remoteVideoRef.current.srcObject = event.streams[0];
-                            
-                            remoteVideoRef.current.onloadedmetadata = () => {
-                                console.log("📹 Video metadata loaded:", 
-                                    remoteVideoRef.current.videoWidth, 
-                                    remoteVideoRef.current.videoHeight);
-                                console.log("✅ Video should be playing");
-                            };
-                        } else {
-                            console.error("❌ remoteVideoRef is STILL null!");
-                        }
-                    }
-                };
-
-                // ICE
-                peerRef.current.onicecandidate = (event) => {
-                    if (event.candidate) {
-                        console.log("🧊 Sending ICE candidate");
-                        socket.emit("ice-candidate", {
-                            senderId: user._id,
-                            to: from,
-                            candidate: event.candidate
-                        });
-                    }
-                };
-
-                // Set remote description
-                await peerRef.current.setRemoteDescription(
-                    new RTCSessionDescription(offer)
-                );
-                console.log("✅ Set remote description");
-
-                // Create answer
-                const answer = await peerRef.current.createAnswer();
-                await peerRef.current.setLocalDescription(answer);
-                console.log("✅ Created answer");
-
-                // Send answer
-                socket.emit("answer-call", {
-                    senderId: user._id,
-                    to: from,
-                    answer
-                });
-            } catch (error) {
-                console.error("❌ Error accepting call:", error);
-                endCall();
-            }
-        };
-
-        socket.on("incoming-call", handleIncomingCall);
-        return () => socket.off("incoming-call");
-    }, [user]);
-
-    // Handle call accepted
-    useEffect(() => {
-        const handleCallAccepted = async ({ answer }) => {
-            console.log("✅ Call accepted");
-            try {
-                await peerRef.current.setRemoteDescription(
-                    new RTCSessionDescription(answer)
-                );
-            } catch (error) {
-                console.error("❌ Error setting remote description:", error);
-            }
-        };
-
-        socket.on("call-accepted", handleCallAccepted);
-        return () => socket.off("call-accepted");
-    }, []);
-
-    // Handle ICE candidates
-    useEffect(() => {
-        const handleIceCandidate = async ({ candidate }) => {
-            console.log("🧊 Received ICE candidate");
-            if (peerRef.current && candidate) {
-                try {
-                    await peerRef.current.addIceCandidate(
-                        new RTCIceCandidate(candidate)
-                    );
-                    console.log("✅ Added ICE candidate");
-                } catch (error) {
-                    console.error("❌ Error adding ICE candidate:", error);
-                }
-            }
-        };
-
-        socket.on("ice-candidate", handleIceCandidate);
-        return () => socket.off("ice-candidate");
-    }, []);
-
-    // End call function
-    const endCall = () => {
-        console.log("📴 Ending call");
-        
-        if (peerRef.current) {
-            peerRef.current.close();
-            peerRef.current = null;
-        }
-
-        if (localStreamRef.current) {
-            localStreamRef.current.getTracks().forEach(t => t.stop());
-            localStreamRef.current = null;
-        }
-
-        if (localVideoRef.current) {
-            localVideoRef.current.srcObject = null;
-        }
-
-        if (remoteVideoRef.current) {
-            remoteVideoRef.current.srcObject = null;
-        }
-
-        setInCall(false);
-        setCallType(null);
+    peerRef.current.onicecandidate = e => {
+      if (e.candidate) {
+        socket.emit("ice-candidate", {
+          to: selectedUser._id,
+          candidate: e.candidate
+        });
+      }
     };
 
-    // Message handler
-    const sendMessageHandler = async (receiverId) => {
-        try {
-            const res = await axios.post(
-                `http://localhost:8000/api/v1/message/send/${receiverId}`,
-                { textMessage },
-                {
-                    headers: { 'Content-Type': 'application/json' },
-                    withCredentials: true
-                }
-            );
-            if (res.data.success) {
-                dispatch(setMessages([...messages, res.data.newMessage]));
-                setTextMessage("");
-            }
-        } catch (error) {
-            console.log(error);
-        }
+    const offer = await peerRef.current.createOffer();
+    await peerRef.current.setLocalDescription(offer);
+
+    socket.emit("call-user", {
+      senderId: user._id,
+      receiverId: selectedUser._id,
+      offer,
+      callType: type
+    });
+  };
+
+  /* ================= INCOMING ================= */
+  useEffect(() => {
+    if (!socket) return;
+
+    socket.on("incoming-call", data => {
+      if (callState !== "idle") return;
+      setIncomingCall(data);
+      setCallType(data.callType);
+      setCallState("ringing");
+    });
+    // socket.emit("reject-call", {
+    //   callId: incomingCall.callId,
+    //   senderId: incomingCall.from
+    // });
+    // cleanupCall();
+
+    socket.on("call-missed", cleanupCall);
+
+    return () => {
+      socket.off("incoming-call");
+      socket.off("call-rejected");
+      socket.off("call-missed");
+    };
+  }, [socket, callState]);
+
+  /* ================= ACCEPT ================= */
+  const acceptCall = async () => {
+    if (!incomingCall) return;
+    if (peerRef.current) return;
+    if (acquiringMediaRef.current) return;
+
+    const { callId, from, offer, callType } = incomingCall;
+
+    setCallState("in-call");
+
+    peerRef.current = new RTCPeerConnection({
+      iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
+    });
+
+    try {
+      const stream = await getLocalStream(callType === "video");
+
+      stream.getTracks().forEach(track =>
+        peerRef.current.addTrack(track, stream)
+      );
+
+      if (callType === "video" && localVideoRef.current) {
+        localVideoRef.current.srcObject = stream;
+      }
+    } catch (err) {
+      console.error("Media error:", err);
+      cleanupCall();
+      return;
+    }
+
+    peerRef.current.ontrack = e => {
+      if (remoteVideoRef.current && e.streams[0]) {
+        remoteVideoRef.current.srcObject = e.streams[0];
+      }
     };
 
-    // Select user from URL
-    useEffect(() => {
-        if (!userId || !followingUsers.length) return;
-        const userToChat = followingUsers.find((u) => u._id === userId);
-        if (userToChat) {
-            dispatch(setSelectedUser(userToChat));
-        }
-    }, [userId, followingUsers, dispatch]);
+    peerRef.current.onicecandidate = e => {
+      if (e.candidate) {
+        socket.emit("ice-candidate", {
+          to: from,
+          candidate: e.candidate
+        });
+      }
+    };
 
-    // Cleanup on unmount
-    useEffect(() => {
-        return () => dispatch(setSelectedUser(null));
-    }, [dispatch]);
-
-    return (
-        <div className='flex ml-[16%] h-screen'>
-            <section className='w-full md:w-1/4 my-8'>
-                <h1 className='font-bold mb-4 px-3 text-xl'>{user?.username}</h1>
-                <hr className='mb-4 border-gray-300' />
-                <div className='overflow-y-auto h-[80vh]'>
-                    {followingUsers.map((followedUser) => {
-                        const isOnline = onlineUsers.includes(followedUser._id);
-                        return (
-                            <div
-                                key={followedUser._id}
-                                onClick={() => dispatch(setSelectedUser(followedUser))}
-                                className="flex gap-3 items-center p-3 hover:bg-gray-50 cursor-pointer"
-                            >
-                                <Avatar className="w-14 h-14">
-                                    <AvatarImage src={followedUser.profilePicture} />
-                                    <AvatarFallback>CN</AvatarFallback>
-                                </Avatar>
-                                <div className="flex flex-col">
-                                    <span className="font-medium">{followedUser.username}</span>
-                                    <span className={`text-xs font-bold ${isOnline ? "text-green-600" : "text-red-600"}`}>
-                                        {isOnline ? "online" : "offline"}
-                                    </span>
-                                </div>
-                            </div>
-                        );
-                    })}
-                </div>
-            </section>
-
-            {selectedUser ? (
-                <section className='flex-1 border-l border-l-gray-300 flex flex-col h-full'>
-                    <ChatHeader startCall={startCall} />
-
-                    {/* AUDIO CALL UI */}
-                    {inCall && callType === "audio" && (
-                        <div className="fixed bottom-6 right-6 bg-white shadow-xl p-4 rounded-xl z-50 w-64">
-                            <p className="font-semibold text-center">
-                                Audio call with {selectedUser?.username}
-                            </p>
-                            <div className="flex justify-center gap-4 mt-4">
-                                <Button variant="destructive" onClick={endCall}>
-                                    End Call
-                                </Button>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* VIDEO CALL UI */}
-                    {inCall && callType === "video" && (
-                        <div className="fixed inset-0 bg-black z-50 flex items-center justify-center">
-                            {/* Remote video - FULL SCREEN */}
-                            <video
-                                ref={remoteVideoRef}
-                                autoPlay
-                                playsInline
-                                muted={false}
-                                style={{
-                                    width: '100%',
-                                    height: '100%',
-                                    objectFit: 'cover',
-                                    backgroundColor: 'black'
-                                }}
-                            />
-
-                            {/* Local video - SMALL CORNER */}
-                            <video
-                                ref={localVideoRef}
-                                autoPlay
-                                muted
-                                playsInline
-                                style={{
-                                    position: 'absolute',
-                                    bottom: '20px',
-                                    right: '20px',
-                                    width: '200px',
-                                    height: '150px',
-                                    borderRadius: '8px',
-                                    border: '2px solid white',
-                                    objectFit: 'cover',
-                                    backgroundColor: 'black'
-                                }}
-                            />
-
-                            <Button
-                                variant="destructive"
-                                onClick={endCall}
-                                className="absolute top-4 right-4 z-10"
-                            >
-                                End Call
-                            </Button>
-                        </div>
-                    )}
-
-                    <Messages selectedUser={selectedUser} />
-                    <div className='flex items-center p-4 border-t border-t-gray-300'>
-                        <Input 
-                            value={textMessage} 
-                            onChange={(e) => setTextMessage(e.target.value)} 
-                            type="text" 
-                            className='flex-1 mr-2 focus-visible:ring-transparent' 
-                            placeholder="Messages..." 
-                        />
-                        <Button onClick={() => sendMessageHandler(selectedUser?._id)}>
-                            Send
-                        </Button>
-                    </div>
-                </section>
-            ) : (
-                <div className='flex flex-col items-center justify-center mx-auto'>
-                    <MessageCircleCode className='w-32 h-32 my-4' />
-                    <h1 className='font-medium'>Your messages</h1>
-                    <span>Send a message to start a chat.</span>
-                </div>
-            )}
-        </div>
+    await peerRef.current.setRemoteDescription(
+      new RTCSessionDescription(offer)
     );
+
+    for (const c of pendingCandidates.current) {
+      await peerRef.current.addIceCandidate(c);
+    }
+    pendingCandidates.current = [];
+
+    const answer = await peerRef.current.createAnswer();
+    await peerRef.current.setLocalDescription(answer);
+
+    socket.emit("accept-call", {
+      callId,
+      senderId: from,
+      answer
+    });
+  };
+  useEffect(() => {
+    if (!socket) return;
+
+    socket.on("end-call", () => {
+      cleanupCall();
+    });
+
+    return () => socket.off("end-call");
+  }, [socket]);
+
+
+  /* ================= ACCEPTED ================= */
+  useEffect(() => {
+    if (!socket) return;
+
+    socket.on("call-accepted", async ({ answer }) => {
+      if (!peerRef.current) return;
+      await peerRef.current.setRemoteDescription(
+        new RTCSessionDescription(answer)
+      );
+      setCallState("in-call");
+    });
+
+    return () => socket.off("call-accepted");
+  }, [socket]);
+
+  /* ================= ICE ================= */
+  useEffect(() => {
+    if (!socket) return;
+
+    socket.on("ice-candidate", async ({ candidate }) => {
+      if (!peerRef.current) return;
+
+      if (peerRef.current.remoteDescription) {
+        await peerRef.current.addIceCandidate(candidate);
+      } else {
+        pendingCandidates.current.push(candidate);
+      }
+    });
+
+    return () => socket.off("ice-candidate");
+  }, [socket]);
+
+  /* ================= MESSAGE ================= */
+  const sendMessageHandler = async () => {
+    if (!textMessage.trim()) return;
+
+    await axios.post(
+      `http://localhost:8000/api/v1/message/send/${selectedUser._id}`,
+      { textMessage },
+      { withCredentials: true }
+    );
+    setTextMessage("");
+  };
+
+  /* ================= SELECT ================= */
+  useEffect(() => {
+    if (!userId || !followingUsers.length) return;
+    const u = followingUsers.find(x => x._id === userId);
+    if (u) dispatch(setSelectedUser(u));
+  }, [userId, followingUsers]);
+
+  /* ================= UI ================= */
+  return (
+    <div className="h-screen flex bg-gray-100">
+      <aside className="hidden lg:flex w-[320px] border-r bg-white">
+        <div className="w-full">
+          <h1 className="font-bold p-4">{user?.username}</h1>
+          {followingUsers.map(u => (
+            <div
+              key={u._id}
+              onClick={() => dispatch(setSelectedUser(u))}
+              className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-gray-100"
+            >
+              <Avatar>
+                <AvatarImage src={u.profilePicture} />
+                <AvatarFallback>CN</AvatarFallback>
+              </Avatar>
+              <div>
+                <p className="font-medium">{u.username}</p>
+                <p className={`text-xs ${onlineUsers.includes(u._id) ? "text-green-600" : "text-gray-400"}`}>
+                  {onlineUsers.includes(u._id) ? "online" : "offline"}
+                </p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </aside>
+
+      <main className="flex-1 flex flex-col bg-white">
+        {selectedUser ? (
+          <>
+            <ChatHeader startCall={startCall} />
+            <div className="flex-1 overflow-y-auto">
+              <Messages selectedUser={selectedUser} />
+            </div>
+            <div className="border-t p-3 flex gap-2">
+              <Input value={textMessage} onChange={e => setTextMessage(e.target.value)} />
+              <Button onClick={sendMessageHandler}>Send</Button>
+            </div>
+          </>
+        ) : (
+          <div className="flex-1 flex items-center justify-center text-gray-500">
+            <MessageCircleCode size={64} />
+          </div>
+        )}
+      </main>
+
+      {/* INCOMING */}
+      {callState === "ringing" && incomingCall && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-xl text-center w-[300px]">
+            <p className="font-bold mb-4">
+              Incoming {incomingCall.callType} call
+            </p>
+            <div className="flex gap-4 justify-center">
+              <Button disabled={callState !== "ringing"} onClick={acceptCall}>
+                Accept
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={() => {
+                  if (!incomingCall) return;
+
+                  socket.emit("reject-call", {
+                    callId: incomingCall.callId,
+                    senderId: incomingCall.from
+                  });
+
+                  cleanupCall();
+                }}
+              >
+                Reject
+              </Button>
+
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* VIDEO */}
+      {callState === "in-call" && callType === "video" && (
+        <div className="fixed inset-0 bg-black z-50">
+          <video ref={remoteVideoRef} autoPlay playsInline className="w-full h-full" />
+          <video ref={localVideoRef} autoPlay muted playsInline className="absolute bottom-4 right-4 w-40 h-28 border" />
+          <Button variant="destructive"
+            onClick={() => {
+              socket.emit("end-call", {
+                to: incomingCall?.from || selectedUser?._id
+              });
+              cleanupCall();
+            }} className="absolute top-4 right-4">
+            End Call
+          </Button>
+        </div>
+      )}
+    </div>
+  );
 };
 
 export default ChatPage;

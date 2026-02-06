@@ -1,126 +1,201 @@
-import { Heart, Home, LogOut, MessageCircle, PlusSquare, Search, TrendingUp } from 'lucide-react'
-import React, { useState } from 'react'
-import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar'
-import { toast } from 'sonner'
-import axios from 'axios'
-import { useNavigate } from 'react-router-dom'
-import { useDispatch, useSelector } from 'react-redux'
-import { setAuthUser } from '@/redux/authSlice'
-import CreatePost from './CreatePost'
-import { setPosts, setSelectedPost } from '@/redux/postSlice'
-import { Popover, PopoverContent, PopoverTrigger } from './ui/popover'
-import { Button } from './ui/button'
+import React, { useState } from "react";
+import {
+  Heart,
+  Home,
+  LogOut,
+  MessageCircle,
+  PlusSquare,
+  Search,
+} from "lucide-react";
+import { Film } from "lucide-react";
+import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
+import { toast } from "sonner";
+import axios from "axios";
+import { useNavigate, useLocation } from "react-router-dom";
+import { useDispatch, useSelector } from "react-redux";
+import { setAuthUser } from "@/redux/authSlice";
+import { setPosts, setSelectedPost } from "@/redux/postSlice";
+import CreatePost from "./CreatePost";
+import CreateReel from "./CreateReel";
+import { motion } from "framer-motion";
+
+const sidebarVariants = {
+  hidden: { x: -40, opacity: 0 },
+  visible: {
+    x: 0,
+    opacity: 1,
+    transition: { staggerChildren: 0.06, ease: "easeOut" },
+  },
+};
+
+const itemVariants = {
+  hidden: { x: -20, opacity: 0 },
+  visible: { x: 0, opacity: 1 },
+};
 
 const LeftSidebar = () => {
-    const navigate = useNavigate();
-    const { user } = useSelector(store => store.auth);
-    const { likeNotification } = useSelector(store => store.realTimeNotification);
-    const dispatch = useDispatch();
-    const [open, setOpen] = useState(false);
+  const navigate = useNavigate();
+  const location = useLocation();
+  const dispatch = useDispatch();
+  const { user } = useSelector((store) => store.auth);
 
+  const notifications = useSelector(
+    (store) => store.realTimeNotification.notifications
+  );
 
-    const logoutHandler = async () => {
-        try {
-            const res = await axios.get('http://localhost:8000/api/v1/user/logout', { withCredentials: true });
-            if (res.data.success) {
-                dispatch(setAuthUser(null));
-                dispatch(setSelectedPost(null));
-                dispatch(setPosts([]));
-                navigate("/login");
-                toast.success(res.data.message);
-            }
-        } catch (error) {
-            toast.error(error.response.data.message);
-        }
+  const [open, setOpen] = useState(false);
+  const [createType, setCreateType] = useState(null);
+
+  const logoutHandler = async () => {
+    try {
+      const res = await axios.get(
+        "http://localhost:8000/api/v1/user/logout",
+        { withCredentials: true }
+      );
+      if (res.data.success) {
+        dispatch(setAuthUser(null));
+        dispatch(setSelectedPost(null));
+        dispatch(setPosts([]));
+        navigate("/login");
+        toast.success(res.data.message);
+      }
+    } catch {
+      toast.error("Logout failed");
     }
+  };
 
-    const sidebarHandler = (textType) => {
-        if (textType === 'Logout') {
-            logoutHandler();
-        } else if (textType === "Create") {
-            setOpen(true);
-        } else if (textType === "Profile") {
-            navigate(`/profile/${user?._id}`);
-        } else if (textType === "Home") {
-            navigate("/");
-        } else if (textType === 'Messages') {
-            navigate("/chat");
-        }
+  const sidebarHandler = (type) => {
+    if (type === "Logout") logoutHandler();
+    else if (type === "Home") navigate("/");
+    else if (type === "Reels") navigate("/reels");
+    else if (type === "Messages") navigate("/chat");
+    else if (type === "Notifications") navigate("/notifications");
+    else if (type === "Profile") navigate(`/profile/${user?._id}`);
+    else if (type === "Create Post") {
+      setCreateType("post");
+      setOpen(true);
+    } else if (type === "Create Reel") {
+      setCreateType("reel");
+      setOpen(true);
     }
+  };
 
-    const sidebarItems = [
-        { icon: <Home />, text: "Home" },
-        { icon: <Search />, text: "Search" },
-        { icon: <MessageCircle />, text: "Messages" },
-        { icon: <Heart />, text: "Notifications" },
-        { icon: <PlusSquare />, text: "Create" },
-        {
-            icon: (
-                <Avatar className='w-6 h-6'>
-                    <AvatarImage src={user?.profilePicture} alt="@shadcn" />
-                    <AvatarFallback>CN</AvatarFallback>
-                </Avatar>
-            ),
-            text: "Profile"
-        },
-        { icon: <LogOut />, text: "Logout" },
-    ]
-    return (
-        <div className='fixed top-0 z-10 left-0 px-4 border-r border-gray-300 w-[16%] h-screen'>
-            <div className='flex flex-col'>
-                <div className="my-4 pl-6">
-                    <img
-                        src="/social_logo.png"
-                        alt="SocialSphere Logo"
-                        className="h-32 w-auto object-contain"
-                    />
-                </div>
-                <div>
-                    {
-                        sidebarItems.map((item, index) => {
-                            return (
-                                <div onClick={() => sidebarHandler(item.text)} key={index} className='flex items-center gap-3 relative hover:bg-gray-100 cursor-pointer rounded-lg p-3 my-3'>
-                                    {item.icon}
-                                    <span>{item.text}</span>
-                                    {
-                                        item.text === "Notifications" && likeNotification.length > 0 && (
-                                            <Popover>
-                                                <PopoverTrigger asChild>
-                                                    <Button size='icon' className="rounded-full h-5 w-5 bg-red-600 hover:bg-red-600 absolute bottom-6 left-6">{likeNotification.length}</Button>
-                                                </PopoverTrigger>
-                                                <PopoverContent>
-                                                    <div>
-                                                        {
-                                                            likeNotification.length === 0 ? (<p>No new notification</p>) : (
-                                                                likeNotification.map((notification) => {
-                                                                    return (
-                                                                        <div key={notification.userId} className='flex items-center gap-2 my-2'>
-                                                                            <Avatar>
-                                                                                <AvatarImage src={notification.userDetails?.profilePicture} />
-                                                                                <AvatarFallback>CN</AvatarFallback>
-                                                                            </Avatar>
-                                                                            <p className='text-sm'><span className='font-bold'>{notification.userDetails?.username}</span> liked your post</p>
-                                                                        </div>
-                                                                    )
-                                                                })
-                                                            )
-                                                        }
-                                                    </div>
-                                                </PopoverContent>
-                                            </Popover>
-                                        )
-                                    }
-                                </div>
-                            )
-                        })
-                    }
-                </div>
-            </div>
+  const sidebarItems = [
+    { icon: <Home />, text: "Home", path: "/" },
+    { icon: <Film />, text: "Reels", path: "/reels" },
+    { icon: <Search />, text: "Search" },
+    { icon: <MessageCircle />, text: "Messages", path: "/chat" },
+    { icon: <Heart />, text: "Notifications", path: "/notifications" },
+    { icon: <PlusSquare />, text: "Create Post" },
+    { icon: <PlusSquare />, text: "Create Reel" },
+    {
+      icon: (
+        <Avatar className="w-7 h-7 ring-2 ring-transparent group-hover:ring-black transition">
+          <AvatarImage src={user?.profilePicture} />
+          <AvatarFallback>{user?.username?.[0]}</AvatarFallback>
+        </Avatar>
+      ),
+      text: "Profile",
+      path: `/profile/${user?._id}`,
+    },
+    { icon: <LogOut />, text: "Logout" },
+  ];
 
-            <CreatePost open={open} setOpen={setOpen} />
+  return (
+    <>
+      <motion.aside
+        variants={sidebarVariants}
+        initial="hidden"
+        animate="visible"
+        className="
+          h-screen
+          sticky top-0
+          flex flex-col
+          px-4
+          bg-gradient-to-b from-slate-50/90 to-slate-100/80
+          border-r border-gray-200
+          backdrop-blur-xl
+        "
+      >
+        {/* LOGO */}
+        <motion.div
+          initial={{ scale: 0.8, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ type: "spring", stiffness: 120 }}
+          className="my-6 flex justify-center lg:justify-start"
+        >
+          <img
+            src="/social_logo.png"
+            alt="Logo"
+            className="h-14 w-14 rounded-full bg-white p-2 shadow-md hover:scale-105 transition"
+          />
+        </motion.div>
 
-        </div>
-    )
-}
+        {/* MENU */}
+        <nav className="flex flex-col gap-1">
+          {sidebarItems.map((item, index) => {
+            const isActive =
+              item.path && location.pathname === item.path;
 
-export default LeftSidebar
+            return (
+              <motion.div
+                key={index}
+                variants={itemVariants}
+                whileHover={{ x: 6 }}
+                whileTap={{ scale: 0.96 }}
+                onClick={() => sidebarHandler(item.text)}
+                className={`
+                  group relative
+                  flex items-center gap-4
+                  p-3 rounded-xl
+                  cursor-pointer
+                  transition-all
+                  ${isActive ? "bg-white shadow-sm" : "hover:bg-white"}
+                `}
+              >
+                {/* ACTIVE INDICATOR */}
+                {isActive && (
+                  <motion.span
+                    layoutId="active-pill"
+                    className="absolute left-0 top-2 bottom-2 w-1 rounded-full bg-black"
+                  />
+                )}
+
+                {/* ICON */}
+                <motion.div
+                  whileHover={{ scale: 1.15, rotate: 3 }}
+                  className="text-gray-700 group-hover:text-black"
+                >
+                  {item.icon}
+                </motion.div>
+
+                {/* TEXT */}
+                <span className="hidden lg:block text-sm font-medium">
+                  {item.text}
+                </span>
+
+                {/* NOTIFICATION BADGE */}
+                {item.text === "Notifications" && notifications.length > 0 && (
+                  <motion.span
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    transition={{ type: "spring", stiffness: 200 }}
+                    className="ml-auto hidden lg:flex h-5 w-5 text-xs items-center justify-center rounded-full bg-red-600 text-white"
+                  >
+                    {notifications.length}
+                  </motion.span>
+                )}
+              </motion.div>
+            );
+          })}
+        </nav>
+      </motion.aside>
+
+      {/* CREATE MODALS */}
+      {createType === "post" && <CreatePost open={open} setOpen={setOpen} />}
+      {createType === "reel" && <CreateReel open={open} setOpen={setOpen} />}
+    </>
+  );
+};
+
+export default LeftSidebar;
