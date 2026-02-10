@@ -432,6 +432,11 @@ export const acceptFollowRequest = async (req, res) => {
             { _id: receiverId },
             { $pull: { followRequests: senderId } }
         );
+        await Notification.deleteMany({
+            receiver: receiverId,
+            sender: senderId,
+            type: "follow_request"
+        });
 
         // Create one-way follow (A → B)
         await Promise.all([
@@ -457,7 +462,7 @@ export const acceptFollowRequest = async (req, res) => {
         // ✅ SEND SOCKET NOTIFICATION TO USER A
         const io = getIO();
         const socketId = getReceiverSocketId(senderId);
-        
+
         if (socketId) {
             const populatedNotification = await Notification.findById(notification._id)
                 .populate("sender", "username profilePicture");
@@ -467,7 +472,7 @@ export const acceptFollowRequest = async (req, res) => {
                 type: populatedNotification.type,
                 senderDetails: populatedNotification.sender
             });
-            
+
             console.log("✅ Sent follow_accept notification to User A");
         }
 
@@ -503,9 +508,9 @@ export const acceptFollowRequest = async (req, res) => {
 
     } catch (error) {
         console.error("acceptFollowRequest error:", error);
-        res.status(500).json({ 
+        res.status(500).json({
             success: false,
-            message: "Server error" 
+            message: "Server error"
         });
     }
 };
@@ -521,20 +526,20 @@ export const followBackUser = async (req, res) => {
 
         if (userId === targetId) {
             console.log("❌ Cannot follow yourself");
-            return res.status(400).json({ 
+            return res.status(400).json({
                 success: false,
-                message: "Cannot follow yourself" 
+                message: "Cannot follow yourself"
             });
         }
 
         // Fetch logged-in user (User B)
         const loggedInUser = await User.findById(userId);
-        
+
         if (!loggedInUser) {
             console.log("❌ Logged-in user not found");
-            return res.status(404).json({ 
-                success: false, 
-                message: "User not found" 
+            return res.status(404).json({
+                success: false,
+                message: "User not found"
             });
         }
 
@@ -556,8 +561,8 @@ export const followBackUser = async (req, res) => {
 
         if (!targetFollowsMe) {
             console.log("❌ User A doesn't follow User B");
-            return res.status(400).json({ 
-                success: false, 
+            return res.status(400).json({
+                success: false,
                 message: "User doesn't follow you",
                 debug: {
                     userBFollowers: followerIds,
@@ -574,9 +579,9 @@ export const followBackUser = async (req, res) => {
 
         if (alreadyFollowing) {
             console.log("❌ Already following");
-            return res.status(400).json({ 
-                success: false, 
-                message: "Already following" 
+            return res.status(400).json({
+                success: false,
+                message: "Already following"
             });
         }
 
@@ -606,7 +611,7 @@ export const followBackUser = async (req, res) => {
         // Send socket notification
         const io = getIO();
         const socketId = getReceiverSocketId(targetId);
-        
+
         if (socketId) {
             const populatedNotification = await Notification.findById(notification._id)
                 .populate("sender", "username profilePicture");
@@ -647,41 +652,41 @@ export const followBackUser = async (req, res) => {
 
     } catch (err) {
         console.error("❌ followBack error:", err);
-        res.status(500).json({ 
+        res.status(500).json({
             success: false,
-            message: "Server error" 
+            message: "Server error"
         });
     }
 };
 
 export const searchUsers = async (req, res) => {
-  try {
-    const loggedInUserId = req.id;
-    const { q } = req.query;
+    try {
+        const loggedInUserId = req.id;
+        const { q } = req.query;
 
-    if (!q?.trim()) {
-      return res.json({ success: true, users: [] });
+        if (!q?.trim()) {
+            return res.json({ success: true, users: [] });
+        }
+
+        const users = await User.find({
+            _id: { $ne: loggedInUserId },
+            username: { $regex: q, $options: "i" }
+        }).select("username profilePicture followers following followRequests");
+
+        res.json({
+            success: true,
+            users: users.map(u => ({
+                _id: u._id.toString(),
+                username: u.username,
+                profilePicture: u.profilePicture,
+                followers: u.followers.map(String),
+                following: u.following.map(String),
+                followRequests: u.followRequests.map(String)
+            }))
+        });
+
+    } catch (err) {
+        console.error("searchUsers error:", err);
+        res.status(500).json({ success: false });
     }
-
-    const users = await User.find({
-      _id: { $ne: loggedInUserId },
-      username: { $regex: q, $options: "i" }
-    }).select("username profilePicture followers following followRequests");
-
-    res.json({
-      success: true,
-      users: users.map(u => ({
-        _id: u._id.toString(),
-        username: u.username,
-        profilePicture: u.profilePicture,
-        followers: u.followers.map(String),
-        following: u.following.map(String),
-        followRequests: u.followRequests.map(String)
-      }))
-    });
-
-  } catch (err) {
-    console.error("searchUsers error:", err);
-    res.status(500).json({ success: false });
-  }
 };
