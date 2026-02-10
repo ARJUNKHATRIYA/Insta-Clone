@@ -1,5 +1,5 @@
 import express from "express";
-import { editProfile,sendFollowRequest,acceptFollowRequest,followBackUser,rejectFollowRequest,unfollowUser, getProfile, getSuggestedUsers, login, logout, register,getFollowingUsers,getFollowers,getFollowing } from "../controllers/user.controller.js";
+import { editProfile,sendFollowRequest,acceptFollowRequest,followBackUser, searchUsers,rejectFollowRequest,unfollowUser, getProfile, getSuggestedUsers, login, logout, register,getFollowingUsers,getFollowers,getFollowing } from "../controllers/user.controller.js";
 import isAuthenticated from "../middlewares/isAuthenticated.js";
 import upload from "../middlewares/multer.js";
 import { getMyNotifications } from "../controllers/notification.controller.js";
@@ -21,6 +21,9 @@ router.route("/notifications").get(isAuthenticated, getMyNotifications);
 router.get("/:id/followers", isAuthenticated, getFollowers);
 router.get("/:id/following", isAuthenticated, getFollowing);
 router.post("/follow/back/:id", isAuthenticated, followBackUser);
+// routes/user.route.js
+router.get("/search", isAuthenticated, searchUsers);
+
 
 
 export default router;

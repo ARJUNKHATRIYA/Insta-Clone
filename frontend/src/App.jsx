@@ -16,6 +16,7 @@ import ProtectedRoutes from './components/ProtectedRoutes'
 import ReelsPage from './components/ReelsPage'
 import Notifications from "./components/Notifications";
 import ChatList from './components/ChatList'
+import Search from './components/SearchPage'
 import { addComment } from './redux/postSlice'
 import { setAuthUser } from "@/redux/authSlice";
 
@@ -31,6 +32,7 @@ const browserRouter = createBrowserRouter([
       { path: '/account/edit', element: <ProtectedRoutes><EditProfile /></ProtectedRoutes> },
       { path: '/chat/:userId', element: <ProtectedRoutes><ChatPage /></ProtectedRoutes> },
       { path: '/chat', element: <ProtectedRoutes><ChatList /></ProtectedRoutes> },
+      { path: "/search", element: <ProtectedRoutes><Search /></ProtectedRoutes> },
       { path: "/notifications", element: (<ProtectedRoutes><Notifications /></ProtectedRoutes>) }
     ]
   },
@@ -83,7 +85,7 @@ function App() {
       // ✅ Handle follow_back notification (User A receives when User B follows back)
       if (notification.type === "follow_back" && notification.senderDetails?._id) {
         console.log("🔄 Someone followed me back, updating my followers");
-        
+
         dispatch(setAuthUser({
           ...user,
           followers: user.followers.includes(notification.senderDetails._id)
@@ -95,7 +97,7 @@ function App() {
       // ✅ Handle follow_accept notification (User A receives when User B accepts request)
       if (notification.type === "follow_accept" && notification.senderDetails?._id) {
         console.log("🔄 My follow request was accepted, updating my following");
-        
+
         dispatch(setAuthUser({
           ...user,
           following: user.following.includes(notification.senderDetails._id)

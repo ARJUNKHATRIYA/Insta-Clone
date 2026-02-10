@@ -68,6 +68,7 @@ const LeftSidebar = () => {
     if (type === "Logout") logoutHandler();
     else if (type === "Home") navigate("/");
     else if (type === "Reels") navigate("/reels");
+    else if (type === "Search") navigate("/search");
     else if (type === "Messages") navigate("/chat");
     else if (type === "Notifications") navigate("/notifications");
     else if (type === "Profile") navigate(`/profile/${user?._id}`);

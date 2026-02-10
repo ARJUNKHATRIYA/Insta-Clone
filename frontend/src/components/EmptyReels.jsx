@@ -1,14 +1,13 @@
+// components/EmptyReels.jsx
 import { motion } from "framer-motion";
-import { Camera, Users } from "lucide-react";
+import { Film, Users } from "lucide-react";
 import { Button } from "./ui/button";
 import { useState } from "react";
-import CreatePost from "./CreatePost";
+import CreateReel from "./CreateReel";
 import { useNavigate } from "react-router-dom";
 
-const EmptyFeed = () => {
+const EmptyReels = () => {
   const navigate = useNavigate();
-
-  // 🔥 SAME LOGIC AS LEFT SIDEBAR
   const [open, setOpen] = useState(false);
 
   return (
@@ -17,7 +16,7 @@ const EmptyFeed = () => {
         initial={{ opacity: 0, y: 40 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6, ease: "easeOut" }}
-        className="flex flex-col items-center justify-center text-center px-6 py-20"
+        className="flex flex-col items-center justify-center text-center px-6 py-24"
       >
         {/* ICON */}
         <motion.div
@@ -25,28 +24,27 @@ const EmptyFeed = () => {
           transition={{ repeat: Infinity, duration: 2 }}
           className="mb-6"
         >
-          <div className="h-20 w-20 rounded-full bg-gradient-to-br from-pink-500 to-purple-600 flex items-center justify-center shadow-lg">
-            <Camera className="text-white" size={36} />
+          <div className="h-20 w-20 rounded-full bg-gradient-to-br from-purple-500 to-pink-600 flex items-center justify-center shadow-lg">
+            <Film className="text-white" size={36} />
           </div>
         </motion.div>
 
         {/* TEXT */}
         <h2 className="text-2xl font-semibold text-gray-800 mb-2">
-          Your feed is empty
+          No reels yet
         </h2>
 
         <p className="text-gray-500 max-w-sm mb-8">
-          Start sharing moments or follow people to see what they’re up to.
+          Share your first reel or follow people to watch theirs.
         </p>
 
         {/* ACTIONS */}
         <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
-          {/* ✅ FIXED BUTTON */}
           <Button
             className="bg-[#0095F6] hover:bg-[#0077cc]"
             onClick={() => setOpen(true)}
           >
-            Create your first post
+            Create your first reel
           </Button>
 
           <Button
@@ -60,10 +58,10 @@ const EmptyFeed = () => {
         </div>
       </motion.div>
 
-      {/* ✅ CREATE POST MODAL */}
-      <CreatePost open={open} setOpen={setOpen} />
+      {/* CREATE REEL MODAL */}
+      <CreateReel open={open} setOpen={setOpen} />
     </>
   );
 };
 
-export default EmptyFeed;
+export default EmptyReels;

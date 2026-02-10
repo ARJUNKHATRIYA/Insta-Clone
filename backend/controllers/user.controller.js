@@ -301,72 +301,6 @@ export const sendFollowRequest = async (req, res) => {
     res.json({ success: true, message: "Follow request sent" });
 };
 
-// export const acceptFollowRequest = async (req, res) => {
-//     try {
-//         const receiverId = req.id;      // User B
-//         const senderId = req.params.id; // User A
-
-//         // remove request
-//         await User.updateOne(
-//             { _id: receiverId },
-//             { $pull: { followRequests: senderId } }
-//         );
-
-//         // one-way follow A → B
-//         await Promise.all([
-//             User.updateOne(
-//                 { _id: receiverId },
-//                 { $addToSet: { followers: senderId } }
-//             ),
-//             User.updateOne(
-//                 { _id: senderId },
-//                 { $addToSet: { following: receiverId } }
-//             )
-//         ]);
-
-//         // fetch BOTH users (important)
-//         const receiver = await User.findById(receiverId)
-//             .populate("followers", "username profilePicture")
-//             .populate("following", "username profilePicture");
-
-//         const sender = await User.findById(senderId)
-//             .populate("followers", "username profilePicture")
-//             .populate("following", "username profilePicture");
-
-//         const notification = await Notification.create({
-//             receiver: senderId,   // User A
-//             sender: receiverId,   // User B
-//             type: "follow_accept"
-//         });
-
-//         const io = getIO();
-//         const socketId = getReceiverSocketId(senderId);
-//         if (socketId) {
-//             io.to(socketId).emit("notification", {
-//                 _id: notification._id,
-//                 type: "follow_accept",
-//                 senderDetails: {
-//                     _id: receiverId,
-//                     username: receiver.username,
-//                     profilePicture: receiver.profilePicture
-//                 }
-//             });
-//         }
-
-
-//         return res.json({
-//             success: true,
-//             receiver,
-//             sender
-//         });
-
-//     } catch (err) {
-//         console.error(err);
-//         res.status(500).json({ success: false });
-//     }
-// };
-
-
 export const rejectFollowRequest = async (req, res) => {
     try {
         const userId = req.id;
@@ -484,101 +418,6 @@ export const getFollowing = async (req, res) => {
     }
 };
 
-// export const followBackUser = async (req, res) => {
-//     try {
-//         const userId = req.id;        // B
-//         const targetId = req.params.id; // A
-
-//         await Promise.all([
-//             User.updateOne(
-//                 { _id: userId },
-//                 { $addToSet: { following: targetId } }
-//             ),
-//             User.updateOne(
-//                 { _id: targetId },
-//                 { $addToSet: { followers: userId } }
-//             )
-//         ]);
-
-//         const updatedUser = await User.findById(userId)
-//             .populate("followers", "username profilePicture")
-//             .populate("following", "username profilePicture");
-
-//         res.json({ success: true, user: updatedUser });
-
-//     } catch (err) {
-//         console.error(err);
-//         res.status(500).json({ success: false });
-//     }
-// };
-
-// export const acceptFollowRequest = async (req, res) => {
-//     try {
-//         const receiverId = req.id;      // User B (who accepts)
-//         const senderId = req.params.id; // User A (who sent request)
-
-//         console.log("=== ACCEPT FOLLOW REQUEST ===");
-//         console.log("User B (receiver):", receiverId);
-//         console.log("User A (sender):", senderId);
-
-//         // Remove follow request
-//         await User.updateOne(
-//             { _id: receiverId },
-//             { $pull: { followRequests: senderId } }
-//         );
-
-//         // Create one-way follow (A → B)
-//         await Promise.all([
-//             User.updateOne(
-//                 { _id: receiverId },
-//                 { $addToSet: { followers: senderId } }
-//             ),
-//             User.updateOne(
-//                 { _id: senderId },
-//                 { $addToSet: { following: receiverId } }
-//             )
-//         ]);
-
-//         console.log("✅ User A now follows User B");
-
-//         // ✅ CRITICAL FIX: Fetch FRESH data from database
-//         const receiver = await User.findById(receiverId)
-//             .select("-password -__v");
-
-//         console.log("User B followers (after accept):", receiver.followers.map(f => f.toString()));
-//         console.log("User B following (after accept):", receiver.following.map(f => f.toString()));
-
-//         // ✅ Format for frontend - PLAIN IDs ONLY
-//         const formattedReceiver = {
-//             _id: receiver._id.toString(),
-//             username: receiver.username,
-//             email: receiver.email,
-//             profilePicture: receiver.profilePicture,
-//             bio: receiver.bio,
-//             gender: receiver.gender,
-//             followers: receiver.followers.map(f => f.toString()),
-//             following: receiver.following.map(f => f.toString()),
-//             posts: receiver.posts,
-//             reels: receiver.reels,
-//             bookmarks: receiver.bookmarks || [],
-//             reelBookmarks: receiver.reelBookmarks || []
-//         };
-
-//         console.log("Formatted receiver followers:", formattedReceiver.followers);
-
-//         return res.json({
-//             success: true,
-//             receiver: formattedReceiver
-//         });
-
-//     } catch (error) {
-//         console.error("acceptFollowRequest error:", error);
-//         res.status(500).json({ 
-//             success: false,
-//             message: "Server error" 
-//         });
-//     }
-// };
 export const acceptFollowRequest = async (req, res) => {
     try {
         const receiverId = req.id;      // User B (who accepts)
@@ -813,4 +652,38 @@ export const followBackUser = async (req, res) => {
             message: "Server error" 
         });
     }
+};
+
+// controllers/user.controller.js
+// controllers/user.controller.js
+export const searchUsers = async (req, res) => {
+  try {
+    const loggedInUserId = req.id;
+    const { q } = req.query;
+
+    if (!q?.trim()) {
+      return res.json({ success: true, users: [] });
+    }
+
+    const users = await User.find({
+      _id: { $ne: loggedInUserId },
+      username: { $regex: q, $options: "i" }
+    }).select("username profilePicture followers following followRequests");
+
+    res.json({
+      success: true,
+      users: users.map(u => ({
+        _id: u._id.toString(),
+        username: u.username,
+        profilePicture: u.profilePicture,
+        followers: u.followers.map(String),
+        following: u.following.map(String),
+        followRequests: u.followRequests.map(String)
+      }))
+    });
+
+  } catch (err) {
+    console.error("searchUsers error:", err);
+    res.status(500).json({ success: false });
+  }
 };
