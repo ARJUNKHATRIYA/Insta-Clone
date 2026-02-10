@@ -37,11 +37,40 @@ const Notifications = () => {
                 />
               );
             }
+            // ✅ FOLLOW ACCEPT NOTIFICATION (User A sees this)
+            if (n.type === "follow_accept" && n.senderDetails?._id) {
+              return (
+                <div
+                  key={n._id}
+                  className="flex items-center gap-3 p-4 rounded-xl bg-white border border-gray-200 hover:bg-gray-50 transition"
+                >
+                  <Link to={`/profile/${senderId}`}>
+                    <Avatar>
+                      <AvatarImage src={n.senderDetails.profilePicture} />
+                      <AvatarFallback>
+                        {n.senderDetails.username.slice(0, 2).toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                  </Link>
+
+                  <span className="text-sm">
+                    <Link
+                      to={`/profile/${senderId}`}
+                      className="font-semibold hover:underline"
+                    >
+                      {n.senderDetails.username}
+                    </Link>{" "}
+                    accepted your follow request
+                  </span>
+                </div>
+              );
+            }
+
 
             // ✅ FOLLOW BACK NOTIFICATION (User A sees this when User B follows back)
             if (n.type === "follow_back" && n.senderDetails?._id) {
               return (
-                <div 
+                <div
                   key={n._id}
                   className="flex items-center gap-3 p-4 rounded-xl bg-white border border-gray-200 hover:bg-gray-50 transition"
                 >

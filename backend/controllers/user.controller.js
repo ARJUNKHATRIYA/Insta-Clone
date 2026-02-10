@@ -654,8 +654,6 @@ export const followBackUser = async (req, res) => {
     }
 };
 
-// controllers/user.controller.js
-// controllers/user.controller.js
 export const searchUsers = async (req, res) => {
   try {
     const loggedInUserId = req.id;
