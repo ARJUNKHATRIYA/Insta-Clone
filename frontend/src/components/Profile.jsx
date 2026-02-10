@@ -9,12 +9,9 @@ import axios from "axios";
 import { toast } from "sonner";
 import { setAuthUser } from "@/redux/authSlice";
 import FollowersModal from "./FollowersModal";
-import { setPosts } from "@/redux/postSlice";
-import { setReels } from "@/redux/reelSlice";
 import { setUserProfile } from "@/redux/authSlice";
 import { setSocket } from "@/redux/socketSlice";
 
-/* ---------- EMPTY STATE ---------- */
 const EmptyState = ({ title, subtitle }) => (
   <div className="flex flex-col items-center justify-center py-24 text-center text-gray-500">
     <div className="h-16 w-16 rounded-full border border-gray-300 flex items-center justify-center mb-4">
@@ -43,9 +40,6 @@ const Profile = () => {
   const [showModal, setShowModal] = useState(false);
   const [showFollowBack, setShowFollowBack] = useState(false);
 
-
-
-  /* ---------- MODALS ---------- */
   const openFollowers = async () => {
     if (!userProfile?._id || !userProfile.followers?.length) return;
 
@@ -68,7 +62,6 @@ const Profile = () => {
     setShowModal("following");
   };
 
-  /* ---------- LOGOUT ---------- */
   const logoutHandler = async () => {
     try {
       const res = await axios.get(
@@ -95,20 +88,40 @@ const Profile = () => {
       .toUpperCase()
       .slice(0, 2);
 
+  // ✅ Check follow status - Re-runs when user or userProfile changes
   useEffect(() => {
     if (!user || !userProfile) return;
-    const iFollowHim = user.following.includes(userProfile._id);
-    const heFollowsMe = userProfile.followers.some(u => u._id === user._id);
 
-    setIsFollowing(iFollowHim);
-    setShowFollowBack(heFollowsMe && !iFollowHim);
+    console.log("🔍 Checking follow status...");
+    console.log("Logged-in user:", user._id);
+    console.log("Profile owner:", userProfile._id);
+    console.log("My following:", user.following);
+    console.log("Profile followers:", userProfile.followers);
+
+    // Does logged-in user follow the profile owner?
+    const iFollowThem = user.following.includes(userProfile._id);
+    
+    // Does profile owner follow logged-in user?
+    const theyFollowMe = userProfile.followers.some(follower => {
+      const followerId = typeof follower === 'object' ? follower._id : follower;
+      return followerId === user._id;
+    });
+
+    console.log("I follow them?", iFollowThem);
+    console.log("They follow me?", theyFollowMe);
+
+    setIsFollowing(iFollowThem);
+    
+    // Show "Follow Back" when they follow me but I don't follow them
+    const shouldShowFollowBack = theyFollowMe && !iFollowThem;
+    console.log("Show follow back?", shouldShowFollowBack);
+    
+    setShowFollowBack(shouldShowFollowBack);
     setIsRequested(userProfile.followRequests?.includes(user._id));
 
-  }, [user, userProfile]);
+  }, [user, userProfile, user?.followers, user?.following, userProfile?.followers, userProfile?.following]);
+  // ⬆️ Added more dependencies to ensure re-run when followers/following change
 
-
-
-  /* ---------- FOLLOW ACTIONS ---------- */
   const sendFollowRequest = async () => {
     try {
       const res = await axios.post(
@@ -125,7 +138,6 @@ const Profile = () => {
     }
   };
 
-
   const unfollowUser = async () => {
     try {
       const res = await axios.post(
@@ -136,30 +148,37 @@ const Profile = () => {
 
       if (!res.data.success) return;
 
-      // 🔥 logged-in user (B) removes A from following
+      // Update logged-in user
       dispatch(setAuthUser({
         ...user,
-        following: user.following.filter(
-          id => id !== userProfile._id
-        )
+        following: user.following.filter(id => id !== userProfile._id)
       }));
 
-      // 🔥 viewed profile (A) removes B from followers
+      // Update viewed profile
       dispatch(setUserProfile({
         ...userProfile,
-        followers: userProfile.followers.filter(
-          u => u._id !== user._id
-        )
+        followers: userProfile.followers.filter(f => {
+          const fId = typeof f === 'object' ? f._id : f;
+          return fId !== user._id;
+        })
       }));
 
       setIsFollowing(false);
-      setShowFollowBack(false);
+      
+      // Check if they still follow us
+      const theyStillFollowMe = userProfile.followers.some(follower => {
+        const followerId = typeof follower === 'object' ? follower._id : follower;
+        return followerId === user._id;
+      });
+      setShowFollowBack(theyStillFollowMe);
 
       toast.success("Unfollowed");
     } catch {
       toast.error("Failed to unfollow");
     }
   };
+
+  // ✅ Follow Back function
   const followBack = async () => {
     try {
       const res = await axios.post(
@@ -170,21 +189,17 @@ const Profile = () => {
 
       if (!res.data.success) return;
 
-      // 🔥 logged-in user (B) now follows A
+      // Update logged-in user (User B)
       dispatch(setAuthUser(res.data.user));
 
-      // 🔥 viewed profile (A) gains follower B
+      // Update viewed profile (User A) - add User B as follower
       dispatch(setUserProfile({
         ...userProfile,
-        followers: [
-          ...userProfile.followers,
-          {
-            _id: user._id,
-            username: user.username,
-            profilePicture: user.profilePicture
-          }
-        ]
+        followers: [...userProfile.followers, user._id]
       }));
+
+      setShowFollowBack(false);
+      setIsFollowing(true);
 
       toast.success("Followed back");
     } catch {
@@ -192,8 +207,6 @@ const Profile = () => {
     }
   };
 
-
-  /* ---------- TAB DATA ---------- */
   const displayedItems = (() => {
     if (activeTab === "posts") return userProfile?.posts || [];
     if (activeTab === "reels") return userProfile?.reels || [];
@@ -207,7 +220,6 @@ const Profile = () => {
 
   return (
     <div className="max-w-5xl mx-auto px-4 pb-10">
-      {/* ================= HEADER ================= */}
       <div className="relative mb-24">
         <div className="h-48 rounded-2xl bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500" />
 
@@ -234,7 +246,7 @@ const Profile = () => {
                   {userProfile?.username}
                 </h1>
 
-
+                {/* ✅ Button Logic */}
                 {isOwnProfile ? (
                   <Link to="/account/edit">
                     <Button variant="secondary">Edit Profile</Button>
@@ -252,7 +264,7 @@ const Profile = () => {
                     </Button>
                   </>
                 ) : showFollowBack ? (
-                  <Button className="bg-[#0095F6]" onClick={followBack}>
+                  <Button className="bg-[#0095F6] hover:bg-[#0095F6]/90" onClick={followBack}>
                     Follow Back
                   </Button>
                 ) : isRequested ? (
@@ -265,21 +277,20 @@ const Profile = () => {
                   </Button>
                 )}
               </div>
+
               <div className="flex justify-center md:justify-start gap-8 text-sm mb-1">
                 <span><b>{userProfile?.posts?.length || 0}</b> posts</span>
 
                 <button
                   onClick={openFollowers}
-                  className={`hover:underline ${!userProfile?.followers?.length && "opacity-60 cursor-default"
-                    }`}
+                  className={`hover:underline ${!userProfile?.followers?.length && "opacity-60 cursor-default"}`}
                 >
                   <b>{userProfile?.followers?.length || 0}</b> followers
                 </button>
 
                 <button
                   onClick={openFollowing}
-                  className={`hover:underline ${!userProfile?.following?.length && "opacity-60 cursor-default"
-                    }`}
+                  className={`hover:underline ${!userProfile?.following?.length && "opacity-60 cursor-default"}`}
                 >
                   <b>{userProfile?.following?.length || 0}</b> following
                 </button>
@@ -293,17 +304,17 @@ const Profile = () => {
 
       <div className="h-40 md:h-32" />
 
-      {/* ================= TABS ================= */}
       <div className="sticky top-0 z-20 bg-white/80 backdrop-blur-md border-t border-gray-300">
         <div className="flex justify-around max-w-md mx-auto text-sm font-medium">
           {["posts", "reels", ...(isOwnProfile ? ["saved"] : [])].map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`py-4 flex-1 transition ${activeTab === tab
-                ? "border-b-2 border-black text-black"
-                : "border-b-2 border-transparent text-gray-400"
-                }`}
+              className={`py-4 flex-1 transition ${
+                activeTab === tab
+                  ? "border-b-2 border-black text-black"
+                  : "border-b-2 border-transparent text-gray-400"
+              }`}
             >
               {tab.toUpperCase()}
             </button>
@@ -319,7 +330,6 @@ const Profile = () => {
         />
       )}
 
-      {/* ================= CONTENT ================= */}
       {displayedItems.length === 0 ? (
         <EmptyState
           title={`No ${activeTab} yet`}

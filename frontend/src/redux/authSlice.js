@@ -14,50 +14,36 @@ const authSlice = createSlice({
     },
 
     reducers: {
-        // setAuthUser: (state, action) => {
-        //     state.user = {
-        //         ...action.payload,
-        //         bookmarks: action.payload?.bookmarks || []
-        //     };
-        // },
-        // setAuthUser: (state, action) => {
-        //     const payload = action.payload;
-
-        //     state.user = {
-        //         ...payload,
-        //         followers: (payload.followers || []).map(f =>
-        //             typeof f === "object" ? f._id : f
-        //         ),
-        //         following: (payload.following || []).map(f =>
-        //             typeof f === "object" ? f._id : f
-        //         ),
-        //         bookmarks: payload.bookmarks || [],
-        //         reelBookmarks: payload.reelBookmarks || []
-        //     };
-        // },
         setAuthUser: (state, action) => {
-            const payload = action.payload;
+    const payload = action.payload;
 
-            if (!payload) {
-                state.user = null;
-                state.userProfile = null;
-                state.followingUsers = [];
-                state.suggestedUsers = [];
-                return;
-            }
+    if (!payload) {
+        state.user = null;
+        state.userProfile = null;
+        state.followingUsers = [];
+        state.suggestedUsers = [];
+        return;
+    }
 
-            state.user = {
-                ...payload,
-                followers: (payload.followers || []).map(f =>
-                    typeof f === "object" ? f._id : f
-                ),
-                following: (payload.following || []).map(f =>
-                    typeof f === "object" ? f._id : f
-                ),
-                bookmarks: payload.bookmarks || [],
-                reelBookmarks: payload.reelBookmarks || []
-            };
-        },
+    console.log("🔄 setAuthUser payload:", payload);
+    console.log("🔄 Followers:", payload.followers);
+    console.log("🔄 Following:", payload.following);
+
+    state.user = {
+        ...payload,
+        // ✅ Ensure followers/following are arrays of strings
+        followers: Array.isArray(payload.followers) 
+            ? payload.followers.map(f => typeof f === "object" ? f._id.toString() : f.toString())
+            : [],
+        following: Array.isArray(payload.following)
+            ? payload.following.map(f => typeof f === "object" ? f._id.toString() : f.toString())
+            : [],
+        bookmarks: payload.bookmarks || [],
+        reelBookmarks: payload.reelBookmarks || []
+    };
+
+    console.log("✅ Final user state:", state.user);
+},
         setSuggestedUsers: (state, action) => {
             state.suggestedUsers = action.payload;
         },

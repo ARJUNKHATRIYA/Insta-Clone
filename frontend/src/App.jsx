@@ -75,40 +75,35 @@ function App() {
       dispatch(setOnlineUsers(onlineUsers));
     });
 
-  
-//    socketio.on("notification", (notification) => {
-//   dispatch(addNotification(notification));
+    // ✅ HANDLE ALL NOTIFICATIONS
+    socketio.on("notification", (notification) => {
+      console.log("📨 Received notification:", notification);
+      dispatch(addNotification(notification));
 
-//   if (
-//     notification.type === "follow_accept" &&
-//     notification.senderDetails?._id
-//   ) {
-//     dispatch(
-//       setAuthUser({
-//         ...user,
-//         following: user.following.includes(notification.senderDetails._id)
-//           ? user.following
-//           : [...user.following, notification.senderDetails._id],
-//       })
-//     );
-//   }
-// });
-socketio.on("notification", (notification) => {
-  dispatch(addNotification(notification));
+      // ✅ Handle follow_back notification (User A receives when User B follows back)
+      if (notification.type === "follow_back" && notification.senderDetails?._id) {
+        console.log("🔄 Someone followed me back, updating my followers");
+        
+        dispatch(setAuthUser({
+          ...user,
+          followers: user.followers.includes(notification.senderDetails._id)
+            ? user.followers
+            : [...user.followers, notification.senderDetails._id]
+        }));
+      }
 
-  if (notification.type === "follow_accept") {
-    // ✅ Update logged-in user (User A)
-    dispatch(setAuthUser({
-      ...user,
-      following: user.following.includes(notification.senderDetails._id)
-        ? user.following
-        : [...user.following, notification.senderDetails._id]
-    }));
-  }
-});
-
-
-
+      // ✅ Handle follow_accept notification (User A receives when User B accepts request)
+      if (notification.type === "follow_accept" && notification.senderDetails?._id) {
+        console.log("🔄 My follow request was accepted, updating my following");
+        
+        dispatch(setAuthUser({
+          ...user,
+          following: user.following.includes(notification.senderDetails._id)
+            ? user.following
+            : [...user.following, notification.senderDetails._id]
+        }));
+      }
+    });
 
     dispatch(setSocket(socketio));
 
@@ -136,6 +131,5 @@ socketio.on("notification", (notification) => {
 
   return <RouterProvider router={browserRouter} />;
 }
-
 
 export default App

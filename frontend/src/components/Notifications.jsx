@@ -27,7 +27,7 @@ const Notifications = () => {
           {notifications.map(n => {
             const senderId = n.senderDetails?._id;
 
-
+            // ✅ FOLLOW REQUEST NOTIFICATION (User B sees this)
             if (n.type === "follow_request" && n.senderDetails?._id) {
               return (
                 <FollowRequestItem
@@ -37,18 +37,41 @@ const Notifications = () => {
                 />
               );
             }
+
+            // ✅ FOLLOW BACK NOTIFICATION (User A sees this when User B follows back)
+            if (n.type === "follow_back" && n.senderDetails?._id) {
+              return (
+                <div 
+                  key={n._id}
+                  className="flex items-center gap-3 p-4 rounded-xl bg-white border border-gray-200 hover:bg-gray-50 transition"
+                >
+                  <Link to={`/profile/${senderId}`}>
+                    <Avatar>
+                      <AvatarImage src={n.senderDetails?.profilePicture} />
+                      <AvatarFallback>
+                        {n.senderDetails?.username?.slice(0, 2).toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                  </Link>
+
+                  <span className="text-sm">
+                    <Link
+                      to={`/profile/${senderId}`}
+                      className="font-semibold hover:underline"
+                    >
+                      {n.senderDetails?.username}
+                    </Link>{" "}
+                    followed you back
+                  </span>
+                </div>
+              );
+            }
+
             // ✅ LIKE NOTIFICATIONS
             return (
               <div
                 key={n._id}
-                className="
-                  flex items-center gap-3
-                  p-4 rounded-xl
-                  bg-white
-                  border border-gray-200
-                  hover:bg-gray-50
-                  transition
-                "
+                className="flex items-center gap-3 p-4 rounded-xl bg-white border border-gray-200 hover:bg-gray-50 transition"
               >
                 <Link to={`/profile/${senderId}`}>
                   <Avatar>
