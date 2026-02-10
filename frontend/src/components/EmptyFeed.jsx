@@ -52,7 +52,7 @@ const EmptyFeed = () => {
           <Button
             variant="secondary"
             className="flex gap-2"
-            onClick={() => navigate("/")}
+            onClick={() => navigate("/search")}
           >
             <Users size={18} />
             Find friends
